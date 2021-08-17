@@ -30,7 +30,7 @@ export async function getServerSideProps(context) {
 
     // prep the messages on the serverTimestamp
     const messageRes = await ref
-        .collection("messages")
+        .collection('messages')
         .orderBy("timestamp", "asc")
         .get();
 
@@ -38,7 +38,7 @@ export async function getServerSideProps(context) {
         id: doc.id,
         ...doc.data(),
     })).map(messages => ({
-        ...mesages,
+        ...messages,
         timestamp: messages.timestamp.toDate().getTime()
     }));
 

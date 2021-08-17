@@ -6,13 +6,20 @@ import { useRouter } from "next/router";
 import { Avatar, IconButton } from "@material-ui/core";
 import MoreVertIcon from "@material-ui/icons/MoreVert";
 import AttachFileIcon from '@material-ui/icons/AttachFile';
-
 import InsertEmoticonIcon from "@material-ui/icons/InsertEmoticon";
 import MicIcon from "@material-ui/icons/Mic";
 import Message from "./Message";
+import { useState, useRef } from "react";
+import firebase from "firebase";
+import { TextField } from "@material-ui/core"; 
+import getRecipientEmail from "../utils/getRecipientEmail";
+import TimeAgo from "timeago-react";
 
-function ChatScreen({ chat, messages}) {
+
+function ChatScreen({ chat, messages }) {
     const [user] = useAuthState(auth);
+    const [input, setInput] = useState("");    
+    const endofMessageRef =  useRef(null)
     const router = useRouter();
     const [messagesSnapshot] = useCollection(
         db
@@ -20,6 +27,10 @@ function ChatScreen({ chat, messages}) {
             .doc(router.query.id)
             .collection('messages')
             .orderBy("timestamp", "asc")
+    );
+
+    const [recipientSnapshot] = useCollection(
+        db.collection('users').where('email','==', getRecipientEmail(chat.users, user))
     );
 
     const showMessages = () => {
@@ -35,16 +46,66 @@ function ChatScreen({ chat, messages}) {
                     }}
                 />
             ));
-        }
+        } else {
+            return JSON.parse(messages).map(message=> (
+                <Message key={message.id} user={message.user} message={message}/>
+            ));
+        };
     };
 
+    const scrollToBottom = () => {
+        endofMessageRef.current.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+        });
+    };
+
+    const sendMessage = (e) => {
+        e.preventDefault();
+
+        //update the last seen message
+        db.collection('users').doc(user.uid).set(
+            {
+            lastSeen: firebase.firestore.FieldValue.serverTimestamp(),
+            }, 
+            {merge: true});
+        db.collection('chats').doc(router.query.id).collection('messages').add({
+            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            message: input,
+            user: user.email,
+            photoURL: user.photoURL,
+        });
+
+        setInput("");
+        scrollToBottom();
+    };
+
+    const recipient = recipientSnapshot?.docs?.[0]?.data();  
+    const recipientEmail = getRecipientEmail(chat.users, user);
     return (
         <Container>
             <Header>
-                <Avatar />
+                {recipient ? (
+                    <Avatar src={recipient?.photoURL} />
+                ) : (
+                    <Avatar>{recipientEmail[0]}</Avatar>
+                )}
+                
                 <HeaderInformation>
-                    <h3>Rec Emails</h3>
-                    <p>Last seen ...</p>
+                    
+                    <h3>{recipientEmail}</h3>
+                    { recipientSnapshot ? (
+                        <p>Last active: {' '} 
+                        {recipient?.lastSeen?.toDate() ? (
+                            <TimeAgo datetime={recipient?.lastSeen?.toDate()} /> 
+                        ): (
+                            "unavailable"
+                        )}
+                        </p>
+                    ): (
+                        <p>Loading last active ...</p>
+                    )}
+                        
                 </HeaderInformation>
                 <HeaderIcon>
                     <IconButton>
@@ -56,12 +117,14 @@ function ChatScreen({ chat, messages}) {
             <MessageContainer>
                 {/* show messages */}
                 {showMessages()}
-                <endofMessage/>
+                <endofMessage ref={endofMessageRef} />
             </MessageContainer>
 
             <InputContainer>
                 <InsertEmoticonIcon />
-                <Input />
+                
+                <TextField value={input} onChange={(e) => setInput(e.target.value)}   variant="outlined" fullWidth="true" />
+                <button hidden disabled={!input} type="submit" onClick={sendMessage}>Send Message</button>
                 <MicIcon />
             </InputContainer>
                 
@@ -102,9 +165,15 @@ const HeaderInformation = styled.div`
 
 const HeaderIcon = styled.div``;
 
-const MessageContainer = styled.div``;
+const MessageContainer = styled.div`
+    padding: 30px;
+    background-color: #e5ded8;
+    min-height: 90vh;
+`;
 
-const endofMessage = styled.div``;
+const endofMessage = styled.div`
+    margin-bottom: 50px;
+`;
 
 const InputContainer = styled.form`
     display: flex;
