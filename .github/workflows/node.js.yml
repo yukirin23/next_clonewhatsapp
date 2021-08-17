@@ -28,6 +28,6 @@
           cache: 'npm'
       - run: npm install -g yarn
       - run: yarn install --frozen-lockfile
-      - run: yarn build
+      
 
 
